@@ -1,0 +1,57 @@
+services:
+  minio:
+    image: minio/minio
+    container_name: minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address ":9001"
+    networks:
+      - airflow_net
+
+  spark-master:
+    image: apache/spark:3.5.5
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    container_name: spark-master
+    ports:
+      - "7077:7077"
+      - "8081:8080"
+    environment:
+      - SPARK_MODE=master
+    networks:
+      - airflow_net
+
+  spark-worker:
+    image: apache/spark:3.5.5
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+    container_name: spark-worker
+    depends_on:
+      - spark-master
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_MASTER_URL=spark://spark-master:7077
+    networks:
+      - airflow_net
+
+  metabase:
+    image: custom-metabase:latest
+    container_name: metabase
+    ports:
+      - "3000:3000"
+    networks:
+      - airflow_net
+    environment:
+      - MB_DB_FILE=/metabase-data/metabase.db/metabase.db
+      - MB_PLUGINS_DIR=/plugins
+    volumes:
+      - ./include/warehouse:/metabase-data
+      - ./include/metabase/plugins:/plugins
+
+
+networks:
+  airflow_net:
+    name: crypto-pipeline_4e4163_airflow
+    external: true

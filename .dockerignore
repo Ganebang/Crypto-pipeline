@@ -1,0 +1,29 @@
+# Git & Environment Configs
+.git
+.env
+airflow_settings.yaml
+
+# Local Python & Test Caches
+__pycache__/
+*.pyc
+.venv
+venv/
+ENV/
+.pytest_cache/
+
+# Local Data Lakehouse & Databases (MinIO/DuckDB/H2)
+include/warehouse/*.duckdb
+include/warehouse/*.duckdb.wal
+include/warehouse/metabase.db/
+*.mv.db
+*.trace.db
+
+# Astro & Airflow State Files
+astro
+.astro/
+logs/
+airflow.db
+airflow.cfg
+airflow-webserver.pid
+webserver_config.py
+

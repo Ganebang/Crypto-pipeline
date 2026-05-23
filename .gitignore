@@ -1,0 +1,34 @@
+.git
+.env
+.DS_Store
+airflow_settings.yaml
+__pycache__/
+*.pyc
+astro
+.venv
+venv/
+ENV/
+
+# Astro Framework
+.astro/
+airflow-webserver.pid
+webserver_config.py
+airflow.cfg
+airflow.db
+
+# Pytest
+.pytest_cache/
+
+# Local Data Lakehouse & Databases (MinIO/DuckDB/H2)
+include/warehouse/*.duckdb
+include/warehouse/*.duckdb.wal
+include/warehouse/metabase.db/
+*.mv.db
+*.trace.db
+
+# IDE & Editor Configs
+.idea/
+.vscode/
+*.swp
+*.swo
+

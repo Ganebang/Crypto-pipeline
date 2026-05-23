@@ -1,0 +1,6 @@
+boto3
+requests
+pyspark
+duckdb
+pytest
+pytest-mock
