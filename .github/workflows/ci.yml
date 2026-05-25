@@ -19,6 +19,13 @@ jobs:
       - name: Install Astro CLI
         run: curl -sSL https://install.astronomer.io | sudo bash -s -- v1.25.0
 
+      # 2.5 Initialize Astro project config (since .astro/ is gitignored)
+      - name: Initialize Astro project config
+        run: |
+          mkdir -p .astro
+          echo "project:" > .astro/config.yaml
+          echo "    name: crypto-pipeline" >> .astro/config.yaml
+
       # 3. Parse and Validate Airflow DAGs
       # Sourced via .env.example to mock environment parameters in CI runner
       - name: Lint DAGs (Parse Verification)
