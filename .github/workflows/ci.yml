@@ -17,7 +17,7 @@ jobs:
 
       # 2. Install Astro CLI for Airflow compilation checks
       - name: Install Astro CLI
-        run: curl -sSL https://install.astronomer.io | sudo bash -s -- v1.25.0
+        run: curl -sSL https://install.astronomer.io | sudo bash -s
 
       # 2.5 Initialize Astro project config (since .astro/ is gitignored)
       - name: Initialize Astro project config
