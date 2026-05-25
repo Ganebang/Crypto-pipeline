@@ -1,32 +1,68 @@
+# =============================================================================
+# docker-compose.override.yml
+# =============================================================================
+# Extends the Astronomer-generated docker-compose.yaml with four additional
+# services: MinIO (object storage), Spark master/worker, and Metabase (BI).
+#
+# SECRET MANAGEMENT
+# -----------------
+# All sensitive values are read from the .env file in the project root via
+# the ${VARIABLE} syntax. Docker Compose automatically loads .env at startup.
+# Never hardcode passwords or API keys directly in this file.
+# Copy .env.example → .env and fill in real values before running.
+# =============================================================================
+
 services:
+
+  # ---------------------------------------------------------------------------
+  # MinIO — S3-compatible Object Storage
+  # Hosts the Bronze (raw JSON) and Silver (Parquet) data lake layers.
+  # Console UI: http://localhost:9001
+  # ---------------------------------------------------------------------------
   minio:
-    image: minio/minio
+    image: minio/minio:latest
     container_name: minio
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "9000:9000"   # S3 API endpoint (used by boto3 and DuckDB httpfs)
+      - "9001:9001"   # Web console
     environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_ROOT_USER:     ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
     command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data   # Persist bucket data across container restarts
     networks:
       - airflow_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
+  # ---------------------------------------------------------------------------
+  # Spark Master — Cluster coordinator
+  # The PySpark transform task connects to this node.
+  # Spark UI: http://localhost:8081
+  # ---------------------------------------------------------------------------
   spark-master:
     image: apache/spark:3.5.5
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     container_name: spark-master
     ports:
-      - "7077:7077"
-      - "8081:8080"
+      - "7077:7077"   # Spark cluster port (workers and drivers connect here)
+      - "8081:8080"   # Spark Master web UI
     environment:
       - SPARK_MODE=master
     networks:
       - airflow_net
 
+  # ---------------------------------------------------------------------------
+  # Spark Worker — Executes distributed tasks
+  # Registers itself with the master on startup.
+  # ---------------------------------------------------------------------------
   spark-worker:
     image: apache/spark:3.5.5
-    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
     container_name: spark-worker
     depends_on:
       - spark-master
@@ -36,22 +72,41 @@ services:
     networks:
       - airflow_net
 
+  # ---------------------------------------------------------------------------
+  # Metabase — BI Dashboard
+  # Connects to DuckDB via the patched DuckDB JDBC driver in /plugins.
+  # UI: http://localhost:3000
+  # ---------------------------------------------------------------------------
   metabase:
-    image: custom-metabase:latest
+    image: custom-metabase:latest   # Built from Dockerfile.metabase (Debian JRE)
     container_name: metabase
     ports:
       - "3000:3000"
     networks:
       - airflow_net
     environment:
-      - MB_DB_FILE=/metabase-data/metabase.db/metabase.db
-      - MB_PLUGINS_DIR=/plugins
+      - MB_DB_FILE=/metabase-data/metabase.db/metabase.db   # H2 app database path
+      - MB_PLUGINS_DIR=/plugins                              # DuckDB JDBC driver location
     volumes:
-      - ./include/warehouse:/metabase-data
-      - ./include/metabase/plugins:/plugins
+      - ./include/warehouse:/metabase-data      # DuckDB + Metabase H2 on host disk
+      - ./include/metabase/plugins:/plugins     # Patched DuckDB/MotherDuck JDBC driver
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s   # Metabase needs time to initialise its H2 database
 
+# =============================================================================
+# Named Volumes
+# =============================================================================
+volumes:
+  minio_data:   # MinIO bucket contents survive container restarts and rebuilds
 
+# =============================================================================
+# Networks
+# =============================================================================
 networks:
   airflow_net:
     name: crypto-pipeline_4e4163_airflow
-    external: true
+    external: true   # Created by Astronomer; shared with all Airflow containers
