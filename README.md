@@ -23,6 +23,9 @@ graph TD
     I -->|Passed| J[Metabase BI Dashboard]
 ```
 
+### 📊 Metabase BI Dashboard
+![Metabase Analytical Dashboard](docs/assets/crypto-visual.png)
+
 ---
 
 ## 🛠️ Core Technology Stack
@@ -40,6 +43,9 @@ graph TD
 ```text
 ├── dags/
 │   └── crypto_pipeline.py       # Core Airflow DAG orchestrating ETL and checks
+├── docs/
+│   └── assets/
+│       └── crypto-visual.png    # Metabase visual showcase image
 ├── include/
 │   ├── metabase/
 │   │   └── plugins/             # Patched DuckDB/MotherDuck JDBC Metabase driver
@@ -65,8 +71,21 @@ graph TD
 2. **`check_bronze_quality`:** Asserts the JSON has at least 10 records and essential columns (`id`, `priceUsd`) are present in a sample.
 3. **`transform_assets`:** Spins up a localized **PySpark session**, reads the Bronze JSON, flattens the nested structure, casts fields to proper numeric types (`DoubleType`, `LongType`), drops null records, and writes optimized, compressed Parquet files to the `silver` bucket under `assets/YYYY-MM-DD/`.
 4. **`check_silver_quality`:** Runs DuckDB queries on Silver Parquet files directly inside MinIO via `httpfs` to assert row count thresholds and zero null values.
-5. **`load_gold_tables`:** Updates DuckDB analytical Gold tables (`gold_asset_rankings`, `gold_market_summary`, `gold_price_aggregations`) from Silver Parquet files.
+5. **`load_gold_tables`:** Materializes analytical Gold tables (`gold_asset_rankings`, `gold_market_summary`, `gold_price_aggregations`) and processes slowly-changing data in **`gold_price_history`** via transaction-aware **SCD Type 2**.
 6. **`check_gold_quality`:** Verifies all Gold tables exist in DuckDB and are successfully populated with records.
+
+---
+
+## 🔄 Slowly Changing Dimensions (SCD Type 2) in Gold Layer
+
+To support historical trend analysis, the pipeline implements **Slowly Changing Dimensions (SCD Type 2)** tracking on asset price and rank history inside the `gold_price_history` table:
+
+* **Active Records:** Active records representing the latest state have their `is_current` attribute set to `true` and `valid_to` set to `NULL`.
+* **State Drift & Versioning:** When an asset's price or rank changes compared to the active record in the database, the pipeline gracefully expires the old active record by setting `is_current = false` and `valid_to = now()`, and inserts a fresh active version containing the new pricing data with `valid_from = now()`.
+* **Atomic staging-and-swap update pattern:** To prevent DuckDB file locks and ensure complete concurrency safety with Metabase dashboard readers:
+  1. The pipeline copies the active production DuckDB to a temporary `crypto_staging.duckdb` file.
+  2. All transformations, SCD merges, and view creation are performed inside the staging environment.
+  3. Upon a successful transaction, it executes an atomic file-system swap (`os.replace`) to replace the production database.
 
 ---
 
