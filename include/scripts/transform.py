@@ -75,8 +75,12 @@ def transform_assets() -> None:
         else:
             assets_df = df
 
+        import time
+        from pyspark.sql.window import Window
+        from pyspark.sql.functions import row_number, lit
+
         # --- 3. Cast & filter ------------------------------------------------
-        clean_df = (
+        cast_df = (
             assets_df.select(
                 col('id'),
                 col('rank').cast(LongType()),
@@ -86,9 +90,13 @@ def transform_assets() -> None:
                 col('marketCapUsd').cast(DoubleType()),
                 col('volumeUsd24Hr').cast(DoubleType()),
                 col('changePercent24Hr').cast(DoubleType()),
+                (col('fetched_at').cast(LongType()) if 'fetched_at' in assets_df.columns else lit(int(time.time() * 1000)).cast(LongType())).alias('fetched_at')
             )
             .dropna(subset=['id', 'priceUsd'])
         )
+
+        # --- 3.5 Deduplicate overlapping records by dropping duplicates on id -------
+        clean_df = cast_df.dropDuplicates(['id'])
 
         # --- 4. Write Silver Parquet -----------------------------------------
         clean_df.write.mode('overwrite').parquet(silver_path)

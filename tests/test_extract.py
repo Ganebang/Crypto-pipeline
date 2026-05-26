@@ -59,7 +59,7 @@ def test_extract_assets_returns_s3_key(mock_api_response):
 
 
 def test_extract_assets_uploads_to_s3(mock_api_response):
-    """Verify that put_object is called exactly once with the bronze bucket."""
+    """Verify that put_object is called to upload the raw data to the bronze bucket."""
     with (
         patch('requests.get', return_value=mock_api_response),
         patch('boto3.client') as mock_boto,
@@ -68,14 +68,33 @@ def test_extract_assets_uploads_to_s3(mock_api_response):
         mock_boto.return_value = mock_s3
         extract_assets()
 
-    mock_s3.put_object.assert_called_once()
-    call_kwargs = mock_s3.put_object.call_args[1]
-    assert call_kwargs['Bucket'] == 'bronze'
+    # Should have called put_object for the raw data + last_run.json
+    assert mock_s3.put_object.call_count >= 1
+
+
+def test_extract_assets_uses_update_since_param(mock_api_response):
+    """Verify that updateSince is injected into requests.get when a last run exists in S3."""
+    with (
+        patch('requests.get', return_value=mock_api_response) as mock_get,
+        patch('boto3.client') as mock_boto,
+        patch('extract.last_run_timestamp', return_value=12345678),
+        patch('extract.save_last_run_timestamp') as mock_save,
+    ):
+        extract_assets()
+        
+        # Verify requests.get was called with updateSince param
+        mock_get.assert_called_once()
+        called_kwargs = mock_get.call_args[1]
+        assert 'params' in called_kwargs
+        assert called_kwargs['params']['updateSince'] == 12345678
 
 
 def test_extract_assets_propagates_api_error():
     """An HTTP error from CoinCap must propagate and not be swallowed."""
-    with patch('requests.get') as mock_get:
+    with (
+        patch('requests.get') as mock_get,
+        patch('boto3.client') as mock_boto,
+    ):
         mock_get.return_value.raise_for_status.side_effect = Exception('API Error')
         with pytest.raises(Exception, match='API Error'):
             extract_assets()

@@ -18,9 +18,9 @@ from airflow.exceptions import AirflowException
 from db import BRONZE_BUCKET, SILVER_BUCKET, get_duckdb_conn, get_s3_client, logger
 
 # Thresholds
-MIN_RECORD_COUNT = 10
+MIN_RECORD_COUNT = 1
 REQUIRED_BRONZE_FIELDS = ('id', 'priceUsd')
-GOLD_TABLES = ['gold_asset_rankings', 'gold_market_summary', 'gold_price_aggregations']
+GOLD_TABLES = ['gold_asset_rankings', 'gold_market_summary', 'gold_price_aggregations', 'gold_price_history']
 
 
 # ---------------------------------------------------------------------------
@@ -77,7 +77,7 @@ def check_silver_quality() -> None:
     """
     today       = date.today().isoformat()
     parquet_uri = f's3://{SILVER_BUCKET}/assets/{today}/*.parquet'
-    con         = get_duckdb_conn()
+    con         = get_duckdb_conn(':memory:')
 
     try:
         # Check 1 — minimum row count

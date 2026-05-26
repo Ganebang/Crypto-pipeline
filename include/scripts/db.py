@@ -58,7 +58,7 @@ def get_s3_client():
     )
 
 
-def get_duckdb_conn() -> duckdb.DuckDBPyConnection:
+def get_duckdb_conn(path: str = DUCKDB_PATH) -> duckdb.DuckDBPyConnection:
     """
     Return a DuckDB connection pre-configured with httpfs/S3 settings.
 
@@ -66,7 +66,7 @@ def get_duckdb_conn() -> duckdb.DuckDBPyConnection:
     downstream queries can read Parquet files directly from MinIO via the
     s3:// URI scheme.
     """
-    con = duckdb.connect(DUCKDB_PATH)
+    con = duckdb.connect(path)
     # Install & load the HTTP filesystem extension (idempotent)
     con.execute('INSTALL httpfs; LOAD httpfs;')
     # Point DuckDB at our local MinIO instance
