@@ -66,6 +66,8 @@ def test_load_gold_tables_lifecycle():
             patch('load.logger'),
             patch('load.date') as mock_date,
             patch('load.datetime') as mock_datetime,
+            patch('load.shutil.copy2'),
+            patch('load.os.replace'),
         ):
             # --- RUN 1: Initial load on 2026-05-25 ---
             mock_date.today.return_value.isoformat.return_value = '2026-05-25'
